@@ -1,0 +1,7 @@
+streamlit
+supabase
+qdrant-client
+google-generativeai
+python-dotenv
+pandas
+sentence-transformers
