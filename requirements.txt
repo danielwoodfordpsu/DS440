@@ -5,3 +5,4 @@ google-generativeai
 python-dotenv
 pandas
 sentence-transformers
+pillow

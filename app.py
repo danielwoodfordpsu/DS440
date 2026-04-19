@@ -13,9 +13,153 @@ from sentence_transformers import SentenceTransformer
 from supabase import Client, create_client
 
 
+_APP_DIR = os.path.dirname(os.path.abspath(__file__))
+_ASSETS_DIR = os.path.join(_APP_DIR, "assets")
+
+
+def get_mascot_path() -> str | None:
+    for fname in ("dr_opak_mascot.webp", "dr_opak_mascot.png"):
+        p = os.path.join(_ASSETS_DIR, fname)
+        if os.path.isfile(p):
+            return p
+    return None
+
+
 load_dotenv()
 
-st.set_page_config(page_title="Fitness Tracker + Coach", page_icon="🏋️", layout="wide")
+st.set_page_config(page_title="Dr Opak's Fitness Lab", page_icon="🩺", layout="wide")
+
+
+def inject_dr_opak_theme_light() -> None:
+    """High-contrast Dr Opak UI: white panels, black type. Canvas stays light gray."""
+    st.markdown(
+        """
+<style>
+  .stApp {
+    background-color: #d0d0d0 !important;
+    color: #000000 !important;
+  }
+  [data-testid="stAppViewContainer"] {
+    color: #000000 !important;
+  }
+  [data-testid="stHeader"] {
+    background-color: #ffffff !important;
+    border-bottom: 1px solid #000000;
+  }
+  section[data-testid="stMain"] > div {
+    background-color: #ffffff !important;
+  }
+  .block-container {
+    background-color: #ffffff !important;
+    color: #000000 !important;
+  }
+  [data-testid="stSidebarContent"] {
+    background-color: #ffffff !important;
+    color: #000000 !important;
+    border-right: 2px solid #000000;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    font-family: Georgia, "Times New Roman", serif !important;
+    color: #000000 !important;
+  }
+  .stApp p, .stApp span, .stApp label, .stApp li, .stApp small,
+  [data-testid="stMarkdownContainer"] p,
+  [data-testid="stMarkdownContainer"] span,
+  [data-testid="stMarkdownContainer"] li,
+  [data-testid="stWidgetLabel"] p,
+  [data-testid="stWidgetLabel"] label,
+  .stCaption, span[data-testid="stCaption"] {
+    color: #000000 !important;
+    -webkit-text-fill-color: #000000 !important;
+  }
+  .dr-opak-tagline {
+    font-family: Georgia, "Times New Roman", serif;
+    color: #000000 !important;
+    font-style: italic;
+    border-left: 4px solid #000000;
+    padding-left: 10px;
+    margin: 0.25rem 0 0.75rem 0;
+  }
+  /* Form controls: white fields, black text */
+  .stTextInput input, .stTextArea textarea,
+  [data-baseweb="input"] input, [data-baseweb="textarea"] textarea,
+  .stNumberInput input, [data-testid="stNumberInput"] input {
+    background-color: #ffffff !important;
+    color: #000000 !important;
+    -webkit-text-fill-color: #000000 !important;
+    border: 1px solid #000000 !important;
+  }
+  [data-baseweb="select"] > div {
+    background-color: #ffffff !important;
+    color: #000000 !important;
+    -webkit-text-fill-color: #000000 !important;
+    border: 1px solid #000000 !important;
+  }
+  [data-baseweb="select"] span {
+    color: #000000 !important;
+    -webkit-text-fill-color: #000000 !important;
+  }
+  .stSlider label, .stSlider span, .stCheckbox label, .stRadio label {
+    color: #000000 !important;
+  }
+  .stButton > button,
+  [data-testid="stFormSubmitButton"] button {
+    background-color: #ffffff !important;
+    color: #000000 !important;
+    -webkit-text-fill-color: #000000 !important;
+    border: 2px solid #000000 !important;
+  }
+  .stTabs [data-baseweb="tab-list"] {
+    background-color: #ffffff !important;
+  }
+  div[data-testid="stTabs"] [data-baseweb="tab"] {
+    color: #000000 !important;
+  }
+  .streamlit-expanderHeader {
+    background-color: #ffffff !important;
+    color: #000000 !important;
+  }
+  [data-testid="stAlert"] {
+    color: #000000 !important;
+  }
+  [data-testid="stAlert"] p, [data-testid="stAlert"] span {
+    color: #000000 !important;
+  }
+  [data-testid="stDataFrame"] {
+    background-color: #ffffff !important;
+  }
+  .stApp code, .stApp pre {
+    background-color: #f5f5f5 !important;
+    color: #000000 !important;
+  }
+</style>
+""",
+        unsafe_allow_html=True,
+    )
+
+
+inject_dr_opak_theme_light()
+
+
+def render_dr_opak_banner() -> None:
+    mascot = get_mascot_path()
+    if mascot:
+        c1, c2 = st.columns([0.18, 0.82])
+        with c1:
+            st.image(mascot, width=110)
+        with c2:
+            st.markdown("## Dr Opak's Fitness Laboratory")
+            st.markdown(
+                '<p class="dr-opak-tagline">Good news, everyone! Science, sets, and slightly '
+                "unhinged spotting advice await.</p>",
+                unsafe_allow_html=True,
+            )
+    else:
+        st.markdown("## Dr Opak's Fitness Laboratory")
+        st.markdown(
+            '<p class="dr-opak-tagline">Good news, everyone! Drop your keys in the chalk bucket.</p>',
+            unsafe_allow_html=True,
+        )
 
 
 def _env(name: str, default: str = "") -> str:
@@ -31,11 +175,15 @@ def get_supabase_client() -> Client | None:
 
 
 def get_qdrant_client() -> QdrantClient | None:
-    url = _env("QDRANT_URL")
+    url = _env("QDRANT_URL").strip().rstrip("/")
     api_key = _env("QDRANT_API_KEY")
     if not url or not api_key:
         return None
-    return QdrantClient(url=url, api_key=api_key)
+    # Strip accidental /collections suffix (common copy-paste mistake → 404)
+    for bad in ("/collections", "/dashboard"):
+        if url.lower().endswith(bad):
+            url = url[: -len(bad)].rstrip("/")
+    return QdrantClient(url=url, api_key=api_key, timeout=120)
 
 
 def init_gemini() -> bool:
@@ -60,6 +208,38 @@ def supabase_fetch_lifts(supabase: Client, user_id: str, limit: int = 50) -> lis
     )
     response = query.execute()
     return response.data or []
+
+
+def format_lifts_for_llm(rows: list[dict[str, Any]], athlete_id: str) -> str:
+    if not rows:
+        return f"No lift rows found for user_id `{athlete_id}`."
+    lines: list[str] = []
+    for i, r in enumerate(rows, start=1):
+        ex = r.get("exercise", "")
+        w = r.get("weight", "")
+        rep = r.get("reps", "")
+        sets_n = r.get("sets", "")
+        rpe = r.get("rpe")
+        when = r.get("lifted_at", "")
+        notes = (r.get("notes") or "").replace("\n", " ").strip()
+        if len(notes) > 140:
+            notes = notes[:137] + "..."
+        rpe_part = f" RPE {rpe}" if rpe is not None and str(rpe).strip() != "" else ""
+        note_part = f" | notes: {notes}" if notes else ""
+        lines.append(f"{i}. {when} | {ex} | {w} x {rep} x {sets_n}{rpe_part}{note_part}")
+    return "\n".join(lines)
+
+
+def lift_log_prompt_section(lift_context: str | None) -> str:
+    if not lift_context:
+        return ""
+    return f"""
+### Athlete lift log (from your app database)
+User-supplied training history (not published research). Reference naturally; do **not** use [Source N] tags for these rows — those are only for paper excerpts.
+
+{lift_context}
+
+"""
 
 
 @st.cache_resource
@@ -162,7 +342,9 @@ def qdrant_search_context(
     return deduped[:top_k]
 
 
-def answer_with_context(question: str, context_chunks: list[dict[str, Any]]) -> str:
+def answer_with_context(
+    question: str, context_chunks: list[dict[str, Any]], lift_context: str | None = None
+) -> str:
     context_block = "\n\n".join(
         [
             (
@@ -183,25 +365,24 @@ def answer_with_context(question: str, context_chunks: list[dict[str, Any]]) -> 
         ]
     )
     prompt = f"""
-You are a fitness science coach. Ground your answer in the retrieved papers below.
+You are **Dr Opak** — a warm, eccentric professor-energy fitness coach who still respects evidence.
+Ground research claims in the retrieved papers below. If a lift log is included, use it to personalize programming (volume, frequency, recovery) but keep [Source N] citations for **paper excerpts only**.
 
 Evidence & citations:
-- Use ONLY the retrieved context for factual claims (methods, findings, numbers, quotes). If something is not in the context, say so briefly or omit it.
-- When you state a finding, add an inline citation: [Source N] or [Source N, Source M]. Put the citation at the end of the sentence or paragraph block it supports.
-- Merge overlapping points so you are not repeating the same citation on many tiny one-liners; prefer **fewer, richer** points over many fragment bullets.
+- Use ONLY the retrieved paper excerpts for research factual claims (methods, findings, numbers, quotes). If something is not in the excerpts, say so briefly or omit it.
+- When you state a finding from the papers, add an inline citation: [Source N] or [Source N, Source M] at the end of the sentence/block it supports.
+- Merge overlapping points; prefer **fewer, richer** points over many one-liners.
 
-Depth & structure (aim for a helpful mini-brief, not a list of slogans):
-- Write in **markdown**. Use a **short intro** (2–4 sentences) that frames the question and what the evidence addresses.
-- Then use **subsections** with `###` headings (e.g. biomechanics, coaching, injury considerations) as fits the question.
-- Under each theme, write **2–5 sentences** per point where useful: what was studied, **what they found**, and **what it implies practically** for the reader. Include specifics from the excerpts (e.g. population, task, direction of effect) when the text provides them.
-- End with a **Practical takeaway** subsection: 3–5 concrete bullets tying advice together (still cited where evidence-based).
+Depth & structure:
+- Write in **markdown**. Short intro, then `###` subsections as fits the question.
+- 2–5 sentences per theme where useful; end with **Practical takeaway** bullets (cite papers where relevant).
 
 Do NOT add a "Sources" or "References" section — the app attaches links.
 Do NOT print a top-level heading that says only "Answer" — you may use `###` for real section titles.
 
 Question:
 {question}
-
+{lift_log_prompt_section(lift_context)}
 Retrieved context:
 {context_block}
 """
@@ -301,14 +482,15 @@ def ensure_inline_source_hint(answer: str) -> str:
     )
 
 
-def answer_without_context(question: str) -> str:
+def answer_without_context(question: str, lift_context: str | None = None) -> str:
     prompt = f"""
-You are a helpful strength and fitness coach.
-Give concise, safe, practical advice for the user's question.
+You are **Dr Opak** — a helpful, enthusiastic strength coach with old-school bedside manner.
+Give concise, safe, practical advice. If a lift log is included, personalize recommendations to that history.
 If needed, mention uncertainty and suggest consulting a professional for injuries or medical concerns.
 
 Question:
 {question}
+{lift_log_prompt_section(lift_context)}
 """
     model = genai.GenerativeModel("gemini-2.5-flash")
     response = model.generate_content(prompt)
@@ -316,6 +498,12 @@ Question:
 
 
 def render_env_status() -> None:
+    mascot = get_mascot_path()
+    if mascot:
+        st.sidebar.image(mascot, width=120)
+    st.sidebar.markdown("### Dr Opak")
+    st.sidebar.caption("Ph.D. in Heavy Things — *Good news, everyone!*")
+    st.sidebar.markdown("---")
     st.sidebar.header("Connections")
     checks = {
         "Supabase URL": bool(_env("SUPABASE_URL")),
@@ -334,7 +522,7 @@ def render_env_status() -> None:
 
 
 def render_lifts_tab(supabase: Client | None) -> None:
-    st.subheader("Log Your Lifts")
+    st.subheader("Dr Opak's lift ledger")
     if not supabase:
         st.warning("Connect Supabase first (`SUPABASE_URL` + `SUPABASE_ANON_KEY`).")
         return
@@ -395,8 +583,10 @@ def render_lifts_tab(supabase: Client | None) -> None:
                 st.error(f"Could not fetch lifts: {exc}")
 
 
-def render_qa_tab(qdrant: QdrantClient | None, gemini_ready: bool) -> None:
-    st.subheader("Fitness Q&A (Qdrant + Gemini)")
+def render_qa_tab(
+    qdrant: QdrantClient | None, gemini_ready: bool, supabase: Client | None
+) -> None:
+    st.subheader("Ask Dr Opak (Qdrant + Gemini)")
     if not gemini_ready:
         st.warning("Connect Gemini first (`GEMINI_API_KEY`).")
         return
@@ -417,6 +607,18 @@ def render_qa_tab(qdrant: QdrantClient | None, gemini_ready: bool) -> None:
         "Optional Topic Filter",
         placeholder="nutrition / strength / hypertrophy",
         disabled=not use_qdrant_retrieval,
+    )
+    coach_user_id = st.text_input(
+        "Athlete ID (optional — recent lifts from Supabase)",
+        placeholder="Same User ID as in Lift Tracker",
+        help="If set and Supabase is connected, Dr Opak sees your latest logged lifts when answering.",
+    )
+    coach_lift_limit = st.slider(
+        "Lifts to include for coach context",
+        min_value=5,
+        max_value=40,
+        value=15,
+        help="Most recent first. Only used when Athlete ID is filled in.",
     )
     question = st.text_area("Ask a fitness question", placeholder="How do I improve my squat depth?")
     top_k = st.slider(
@@ -453,6 +655,18 @@ def render_qa_tab(qdrant: QdrantClient | None, gemini_ready: bool) -> None:
             st.error("Collection name is required.")
             return
 
+        coach_uid = (coach_user_id or "").strip()
+        lift_context: str | None = None
+        if coach_uid:
+            if not supabase:
+                st.warning("Supabase is not connected; Dr Opak cannot load lift history for that ID.")
+            else:
+                try:
+                    lift_rows = supabase_fetch_lifts(supabase, coach_uid, limit=int(coach_lift_limit))
+                    lift_context = format_lifts_for_llm(lift_rows, coach_uid)
+                except Exception as exc:
+                    st.warning(f"Could not load lifts for coach: {exc}")
+
         try:
             if use_qdrant_retrieval:
                 with st.spinner("Searching Qdrant and generating answer..."):
@@ -471,11 +685,11 @@ def render_qa_tab(qdrant: QdrantClient | None, gemini_ready: bool) -> None:
                             "Try lowering **Min quality score** or **Papers from year**."
                         )
                         return
-                    answer = answer_with_context(question, context_chunks)
+                    answer = answer_with_context(question, context_chunks, lift_context)
             else:
                 with st.spinner("Generating answer with Gemini..."):
                     context_chunks = []
-                    answer = answer_without_context(question)
+                    answer = answer_without_context(question, lift_context)
 
             st.markdown("### Answer")
             if use_qdrant_retrieval:
@@ -503,13 +717,20 @@ def render_qa_tab(qdrant: QdrantClient | None, gemini_ready: bool) -> None:
                             st.markdown(f"URL: [{chunk['pubmed_url']}]({chunk['pubmed_url']})")
                         st.write(chunk["text"])
                         st.markdown("---")
+
+            if coach_uid and lift_context:
+                with st.expander("Lift context sent to Dr Opak"):
+                    st.text(lift_context)
         except Exception as exc:
             st.error(f"Could not answer question: {exc}")
 
 
 def main() -> None:
-    st.title("🏋️ Fitness Tracker + AI Coach")
-    st.caption("Track lifts with Supabase and ask fitness questions with Qdrant + Gemini.")
+    render_dr_opak_banner()
+    st.caption(
+        "Track lifts with Supabase · Ask Dr Opak with Qdrant + Gemini · "
+        "*Not a real physician—definitely a real fan of progressive overload.*"
+    )
 
     render_env_status()
 
@@ -517,11 +738,17 @@ def main() -> None:
     qdrant = get_qdrant_client()
     gemini_ready = init_gemini()
 
-    tab_lifts, tab_qa = st.tabs(["Lift Tracker", "AI Fitness Q&A"])
+    tab_lifts, tab_qa = st.tabs(["Lift Tracker", "Ask Dr Opak"])
     with tab_lifts:
         render_lifts_tab(supabase)
     with tab_qa:
-        render_qa_tab(qdrant, gemini_ready)
+        render_qa_tab(qdrant, gemini_ready, supabase)
+
+    st.divider()
+    st.caption(
+        "Dr Opak Industries — *A spotter is just a hug from science.* "
+        "If Qdrant shows 404, confirm your cluster URL in the Qdrant Cloud console (HTTPS + port 6333, no `/collections` suffix)."
+    )
 
 
 if __name__ == "__main__":
