@@ -1,5 +1,8 @@
 # Fitness Tracker + AI Coach (Streamlit)
 
+## For quick access:
+Go to app on Streamlit Cloud: https://cn9kwbgfdbqt4ft9yndwk2.streamlit.app/
+
 Two-tab Streamlit app:
 - **Lift Tracker tab**: stores and reads user lift logs from Supabase.
 - **AI Fitness Q&A tab**: retrieves context from Qdrant Cloud and answers with Gemini.
